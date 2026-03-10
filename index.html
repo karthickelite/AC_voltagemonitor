@@ -44,7 +44,7 @@
     }
 
     .voltage {
-      font-size: 3rem;
+      font-size: 2rem;
       font-weight: bold;
       color: #00ffff;
       text-shadow: 0 0 20px #00ffff, 0 0 40px #00ffff;
@@ -109,25 +109,25 @@
 
 <body>
 
-  <h1>🚀 Voltage Monitor</h1>
+  <h1>🚀 3 Phase Voltage Monitor</h1>
 
   <div class="card">
     <div class="label">Current Voltage</div>
     <div class="voltage" id="voltage">Loading...</div>
   </div>
 
-  <!-- Extra metric boxes -->
+  <!-- Phase metric boxes -->
   <div class="metrics-container">
     <div class="metric-box">
-      <div class="metric-label">Min Voltage</div>
+      <div class="metric-label">R Phase</div>
       <div class="metric-value" id="min-voltage">--</div>
     </div>
     <div class="metric-box">
-      <div class="metric-label">Max Voltage</div>
+      <div class="metric-label">Y Phase</div>
       <div class="metric-value" id="max-voltage">--</div>
     </div>
     <div class="metric-box">
-      <div class="metric-label">Average Voltage</div>
+      <div class="metric-label">B Phase</div>
       <div class="metric-value" id="avg-voltage">--</div>
     </div>
   </div>
@@ -157,82 +157,68 @@
     firebase.initializeApp(firebaseConfig);
 
     const db = firebase.database();
-    const voltageRef = db.ref("/VoltageMonitor/voltage");
     const voltageElement = document.getElementById("voltage");
 
-    // Array for graph data
-    let voltageData = [];
+    // References to each phase in Firebase
+    const rRef = db.ref("/VoltageMonitor/R_Phase");
+    const yRef = db.ref("/VoltageMonitor/Y_Phase");
+    const bRef = db.ref("/VoltageMonitor/B_Phase");
+
+    // Phase values
+    let r = 0, y = 0, b = 0;
+
+    // Graph data arrays
     let timeLabels = [];
+    let rData = [];
+    let yData = [];
+    let bData = [];
 
-    // Metrics
-    let minVoltage = null;
-    let maxVoltage = null;
-    let sumVoltage = 0;
-    let count = 0;
-
-    // Chart.js setup
+    // Chart.js setup for all 3 phases
     const ctx = document.getElementById('voltageChart').getContext('2d');
     const voltageChart = new Chart(ctx, {
       type: 'line',
       data: {
         labels: timeLabels,
-        datasets: [{
-          label: 'Voltage (V)',
-          data: voltageData,
-          borderColor: '#00ffff',
-          backgroundColor: 'rgba(0,255,255,0.2)',
-          tension: 0.3,
-          fill: true
-        }]
+        datasets: [
+          { label: 'R Phase', data: rData, borderColor: '#ff0000', backgroundColor: 'rgba(255,0,0,0.2)', tension: 0.3, fill: true },
+          { label: 'Y Phase', data: yData, borderColor: '#ffff00', backgroundColor: 'rgba(255,255,0,0.2)', tension: 0.3, fill: true },
+          { label: 'B Phase', data: bData, borderColor: '#0000ff', backgroundColor: 'rgba(0,0,255,0.2)', tension: 0.3, fill: true }
+        ]
       },
       options: {
         responsive: true,
         scales: {
-          x: { 
-            ticks: { color: '#aad4f5' },
-            grid: { color: 'rgba(0,255,255,0.1)' }
-          },
-          y: { 
-            ticks: { color: '#aad4f5' },
-            grid: { color: 'rgba(0,255,255,0.1)' }
-          }
+          x: { ticks: { color: '#aad4f5' }, grid: { color: 'rgba(0,255,255,0.1)' } },
+          y: { ticks: { color: '#aad4f5' }, grid: { color: 'rgba(0,255,255,0.1)' } }
         },
-        plugins: {
-          legend: { labels: { color: '#aad4f5' } }
-        }
+        plugins: { legend: { labels: { color: '#aad4f5' } } }
       }
     });
 
-    voltageRef.on("value", (snapshot) => {
-      const voltage = snapshot.val();
+    // Function to update metric boxes
+    function updatePhaseBoxes() {
+      document.getElementById("min-voltage").innerText = r + " V"; // R Phase
+      document.getElementById("max-voltage").innerText = y + " V"; // Y Phase
+      document.getElementById("avg-voltage").innerText = b + " V"; // B Phase
+
+      voltageElement.innerText = `R: ${r} V | Y: ${y} V | B: ${b} V`;
+
       const now = new Date().toLocaleTimeString();
-
-      if (voltage !== null) {
-        voltageElement.innerText = voltage + " V";
-
-        // Update metrics
-        if (minVoltage === null || voltage < minVoltage) minVoltage = voltage;
-        if (maxVoltage === null || voltage > maxVoltage) maxVoltage = voltage;
-        sumVoltage += voltage;
-        count++;
-        const avgVoltage = (sumVoltage / count).toFixed(2);
-
-        document.getElementById('min-voltage').innerText = minVoltage + " V";
-        document.getElementById('max-voltage').innerText = maxVoltage + " V";
-        document.getElementById('avg-voltage').innerText = avgVoltage + " V";
-
-        // Update graph
-        if (voltageData.length > 20) { // keep last 20 readings
-          voltageData.shift();
-          timeLabels.shift();
-        }
-        voltageData.push(voltage);
-        timeLabels.push(now);
-        voltageChart.update();
-      } else {
-        voltageElement.innerText = "No Data";
+      // Update chart arrays
+      if(timeLabels.length>20){
+        timeLabels.shift(); rData.shift(); yData.shift(); bData.shift();
       }
-    });
+      timeLabels.push(now);
+      rData.push(r);
+      yData.push(y);
+      bData.push(b);
+      voltageChart.update();
+    }
+
+    // Listen to Firebase changes
+    rRef.on("value", snap => { r = snap.val(); updatePhaseBoxes(); });
+    yRef.on("value", snap => { y = snap.val(); updatePhaseBoxes(); });
+    bRef.on("value", snap => { b = snap.val(); updatePhaseBoxes(); });
   </script>
 </body>
 </html>
